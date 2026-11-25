@@ -122,6 +122,9 @@ func main() {
 	}
 
 	utils.InitHTTPClients()
+	if err := utils.InitReleaseCache(); err != nil {
+		fmt.Printf("Release 缓存初始化失败: %v\n", err)
+	}
 	globalLimiter = utils.InitGlobalLimiter()
 	handlers.InitDockerProxy()
 	handlers.InitImageStreamer()

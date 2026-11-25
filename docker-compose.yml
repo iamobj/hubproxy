@@ -7,6 +7,8 @@ services:
       - "5000:5000"
     volumes:
       - ./src/config.toml:/app/config.toml:ro
+      # 如启用 [releaseCache]，建议取消下一行注释以持久化缓存目录
+      # - ./data/release-cache:/app/cache/releases
     logging:
       driver: json-file
       options:

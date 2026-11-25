@@ -19,6 +19,18 @@ type RegistryMapping struct {
 	Enabled  bool   `toml:"enabled"`
 }
 
+// ReleaseCacheConfig GitHub Release本地持久化缓存配置
+type ReleaseCacheConfig struct {
+	Enabled      bool     `toml:"enabled"`
+	Dir          string   `toml:"dir"`
+	MaxVersions  int      `toml:"maxVersions"`
+	MaxTotalSize string   `toml:"maxTotalSize"`
+	MaxFileSize  string   `toml:"maxFileSize"`
+	LatestTTL    string   `toml:"latestTTL"`
+	WhiteList    []string `toml:"whiteList"`
+	BlackList    []string `toml:"blackList"`
+}
+
 // AppConfig 应用配置结构体
 type AppConfig struct {
 	Server struct {
@@ -55,6 +67,8 @@ type AppConfig struct {
 		Enabled    bool   `toml:"enabled"`
 		DefaultTTL string `toml:"defaultTTL"`
 	} `toml:"tokenCache"`
+
+	ReleaseCache ReleaseCacheConfig `toml:"releaseCache"`
 }
 
 var (
@@ -144,6 +158,16 @@ func DefaultConfig() *AppConfig {
 			Enabled:    true,
 			DefaultTTL: "20m",
 		},
+		ReleaseCache: ReleaseCacheConfig{
+			Enabled:      false,
+			Dir:          "./cache/releases",
+			MaxVersions:  3,
+			MaxTotalSize: "20GB",
+			MaxFileSize:  "1GB",
+			LatestTTL:    "10m",
+			WhiteList:    []string{},
+			BlackList:    []string{},
+		},
 	}
 }
 
@@ -178,6 +202,8 @@ func GetConfig() *AppConfig {
 	configCopy.Security.BlackList = append([]string(nil), appConfig.Security.BlackList...)
 	configCopy.Access.WhiteList = append([]string(nil), appConfig.Access.WhiteList...)
 	configCopy.Access.BlackList = append([]string(nil), appConfig.Access.BlackList...)
+	configCopy.ReleaseCache.WhiteList = append([]string(nil), appConfig.ReleaseCache.WhiteList...)
+	configCopy.ReleaseCache.BlackList = append([]string(nil), appConfig.ReleaseCache.BlackList...)
 	appConfigLock.RUnlock()
 
 	cachedConfig = &configCopy
@@ -275,4 +301,95 @@ func overrideFromEnv(cfg *AppConfig) {
 			cfg.Download.MaxImages = maxImages
 		}
 	}
+
+	if val := strings.TrimSpace(os.Getenv("RELEASE_CACHE_ENABLED")); val != "" {
+		if enabled, err := strconv.ParseBool(val); err == nil {
+			cfg.ReleaseCache.Enabled = enabled
+		}
+	}
+	if val := strings.TrimSpace(os.Getenv("RELEASE_CACHE_DIR")); val != "" {
+		cfg.ReleaseCache.Dir = val
+	}
+	if val := strings.TrimSpace(os.Getenv("RELEASE_CACHE_MAX_VERSIONS")); val != "" {
+		if maxVersions, err := strconv.Atoi(val); err == nil && maxVersions >= 0 {
+			cfg.ReleaseCache.MaxVersions = maxVersions
+		}
+	}
+	if val := strings.TrimSpace(os.Getenv("RELEASE_CACHE_MAX_TOTAL_SIZE")); val != "" {
+		if _, err := ParseByteSize(val); err == nil {
+			cfg.ReleaseCache.MaxTotalSize = val
+		}
+	}
+	if val := strings.TrimSpace(os.Getenv("RELEASE_CACHE_MAX_FILE_SIZE")); val != "" {
+		if _, err := ParseByteSize(val); err == nil {
+			cfg.ReleaseCache.MaxFileSize = val
+		}
+	}
+	if val := strings.TrimSpace(os.Getenv("RELEASE_CACHE_LATEST_TTL")); val != "" {
+		if _, err := time.ParseDuration(val); err == nil {
+			cfg.ReleaseCache.LatestTTL = val
+		}
+	}
+	if val, ok := os.LookupEnv("RELEASE_CACHE_WHITELIST"); ok {
+		cfg.ReleaseCache.WhiteList = splitCSV(val)
+	}
+	if val, ok := os.LookupEnv("RELEASE_CACHE_BLACKLIST"); ok {
+		cfg.ReleaseCache.BlackList = splitCSV(val)
+	}
+}
+
+func splitCSV(raw string) []string {
+	parts := strings.Split(raw, ",")
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
+// ParseByteSize 解析带单位的字节大小配置（如 "20GB", "512MB", "0"）
+func ParseByteSize(raw string) (int64, error) {
+	s := strings.TrimSpace(raw)
+	if s == "" || s == "0" {
+		return 0, nil
+	}
+
+	upper := strings.ToUpper(s)
+	suffixes := []struct {
+		suffix string
+		mult   int64
+	}{
+		{"TIB", 1024 * 1024 * 1024 * 1024},
+		{"GIB", 1024 * 1024 * 1024},
+		{"MIB", 1024 * 1024},
+		{"KIB", 1024},
+		{"TB", 1024 * 1024 * 1024 * 1024},
+		{"GB", 1024 * 1024 * 1024},
+		{"MB", 1024 * 1024},
+		{"KB", 1024},
+		{"T", 1024 * 1024 * 1024 * 1024},
+		{"G", 1024 * 1024 * 1024},
+		{"M", 1024 * 1024},
+		{"K", 1024},
+		{"B", 1},
+	}
+
+	for _, item := range suffixes {
+		if strings.HasSuffix(upper, item.suffix) {
+			numStr := strings.TrimSpace(upper[:len(upper)-len(item.suffix)])
+			val, err := strconv.ParseFloat(numStr, 64)
+			if err != nil || val < 0 {
+				return 0, fmt.Errorf("无效的字节大小: %q", raw)
+			}
+			return int64(val * float64(item.mult)), nil
+		}
+	}
+
+	val, err := strconv.ParseInt(upper, 10, 64)
+	if err != nil || val < 0 {
+		return 0, fmt.Errorf("无效的字节大小: %q", raw)
+	}
+	return val, nil
 }

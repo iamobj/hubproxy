@@ -117,6 +117,11 @@ func (ac *AccessController) CheckGitHubAccess(matches []string) (allowed bool, r
 	return true, ""
 }
 
+// MatchGitHubRepoList 检查指定 owner/repo 是否匹配仓库规则列表（支持通配符）
+func (ac *AccessController) MatchGitHubRepoList(owner, repo string, list []string) bool {
+	return ac.checkList([]string{owner, repo}, list)
+}
+
 // matchImageInList 检查Docker镜像是否在指定列表中
 func (ac *AccessController) matchImageInList(imageInfo DockerImageInfo, list []string) bool {
 	fullName := strings.ToLower(imageInfo.FullName)

@@ -78,6 +78,12 @@ func GitHubProxyHandler(c *gin.Context) {
 		rawPath = strings.Replace(rawPath, "/blob/", "/raw/", 1)
 	}
 
+	if target, ok := utils.ParseGitHubReleaseURL(rawPath); ok {
+		if utils.GetReleaseCache().ServeReleaseDownload(c, target, rawPath, blockedContentTypes) {
+			return
+		}
+	}
+
 	ProxyGitHubRequest(c, rawPath)
 }
 

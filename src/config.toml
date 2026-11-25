@@ -89,3 +89,21 @@ enabled = true
 enabled = true
 # 默认缓存时间(分钟)
 defaultTTL = "20m"
+
+[releaseCache]
+# 是否启用 GitHub Release 本地磁盘缓存（减少重复回源流量）
+enabled = false
+# 本地缓存根目录（Docker 部署建议挂载持久化卷）
+dir = "./cache/releases"
+# 每个仓库最多保留的最新 Release Tag 数量（0 表示不限制单仓库版本数，仅受 maxTotalSize 约束）
+maxVersions = 3
+# 全局磁盘缓存总容量上限（支持 KB/MB/GB/TB 或字节数，"0" 表示不限制）
+maxTotalSize = "20GB"
+# 允许缓存的单文件大小上限（仍受 [server].fileSize 限制）
+maxFileSize = "1GB"
+# /releases/latest/download/... 真实版本号探测缓存时间（"0" 表示每次请求都实时探测 302）
+latestTTL = "10m"
+# 缓存仓库白名单（支持 owner/repo、owner/* 通配符；为空时对所有允许代理的仓库生效）
+whiteList = []
+# 缓存仓库黑名单（优先级高于白名单，命中则仅透传不落盘）
+blackList = []
